@@ -4,6 +4,8 @@ This project mimics the functionality of an ATM in a command line program.
 
 To run this program, compile the project to a binary and run the binary via the command line.
 
+## Docker
+
 To build this project as a Docker image:
 
 cd into the project directory and build the image using the following command:
