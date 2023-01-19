@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/looplab/fsm"
 	"github.com/mitchellkelly/atm/bank"
 )
 
@@ -30,7 +31,16 @@ func (self *ATM) UpdateBalance() {
 
 // initialize the atm with some values
 func (self *ATM) Initialize() {
-	// TODO
+	// TODO read the bank client token and create an authorized client
+	self.bankClient = bank.NewClient()
+
+	// make the withdrawls map if it wasnt already created
+	if self.Withdrawls == nil {
+		self.Withdrawls = make(map[string]float32)
+	}
+
+	// update the Balance field with the amount of money in the machine
+	self.UpdateBalance()
 }
 
 func midnight() time.Time {
@@ -46,16 +56,52 @@ func midnight() time.Time {
 }
 
 // set up the atm to an operational state and run the the finite state machine
+// NOTE: this function will block until the atm is shutdown
 func (self *ATM) Run() { // TODO logging
-	// TODO
+	// make sure the atm is initialized
+	self.Initialize()
+
+	go func() {
+		// check the internal balance of the machine every day at midnight and reset the daily withdraw limits
+		for self.stopped == false {
+			// get the amount of time until midnight so we can set a timer
+			var waitInterval = midnight().Sub(time.Now())
+			// block until midnight
+			<-time.After(waitInterval)
+
+			// update balance
+			self.UpdateBalance()
+			// clear withdrawls
+			self.Withdrawls = make(map[string]float32)
+		}
+	}()
+
+	// create the fsm that runs the atm logic
+	var atmFsm = fsm.NewFSM(startingState, atmFsmEvents, atmFsmCallbacks)
+	// store the atm in the fsm metadata so the fsm can make operations on it
+	atmFsm.SetMetadata(fsmAtmMetadataKey, self)
+	// start the fsm
+	atmFsm.Event(context.Background(), startingSuccessEvent)
 }
 
 // get all users that can access the atm
 func (self ATM) UsersContext(ctx context.Context) ([]User, error) {
 	var users = make([]User, 0)
-	var err error
 
-	// TODO
+	// get all users from the bank api
+	var bankUsers, err = self.bankClient.GetUsers()
+	if err == nil {
+		// add the user remaining withdrawl limit
+		for _, x := range bankUsers {
+			var dailyWithdrawls, _ = self.Withdrawls[x.AccountNumber]
+			var user = User{
+				User:            x,
+				DailyWithdrawls: dailyWithdrawls,
+			}
+
+			users = append(users, user)
+		}
+	}
 
 	return users, err
 }
@@ -68,9 +114,17 @@ func (self ATM) Users() ([]User, error) {
 // get a specific user by account number
 func (self ATM) UserContext(ctx context.Context, accountNumber string) (User, error) {
 	var user User
-	var err error
 
-	// TODO
+	// get a user from the bank api
+	var bankUser, err = self.bankClient.GetUser(accountNumber)
+	if err == nil {
+		// add the user remaining withdrawl limit
+		var dailyWithdrawls, _ = self.Withdrawls[accountNumber]
+		user = User{
+			User:            bankUser,
+			DailyWithdrawls: dailyWithdrawls,
+		}
+	}
 
 	return user, err
 }
@@ -81,18 +135,41 @@ func (self ATM) User(accountNumber string) (User, error) {
 }
 
 func (self ATM) validateWithdrawlParams(user User, amount float32) error {
-	var err error
+	// TODO check the user has enough money in their account for the withdrawl
 
-	// TODO
+	// check the withdraw amount is less than the SingleWithdrawlLimit
+	if amount > self.SingleWithdrawlLimit {
+		return fmt.Errorf("The requested withdrawl amount is greater than this ATM allows. Please request a withdrawl less than %f.",
+			self.SingleWithdrawlLimit)
+	}
+	var remainingWithdrawlLimit = self.DailyWithdrawlLimit - user.DailyWithdrawls
+	// check the withdraw amount + previous withdraws is less than a user's DailyWithdrawlLimit
+	if amount > remainingWithdrawlLimit {
+		return fmt.Errorf("The requested withdrawl amount is greater than your allowed daily withdrawl limit. You have %f remaining in your daily withdrawl limit",
+			remainingWithdrawlLimit)
+	}
+	// check the ATM has enough money to process the withdrawl
+	if amount > self.Balance {
+		return fmt.Errorf("This ATM does not have enough money to process your transaction. Please try again tomorrow.")
+	}
 
-	return err
+	return nil
 }
 
 // withdraw money from a user's account
 func (self *ATM) WithdrawContext(ctx context.Context, accountNumber string, amount float32) error {
-	var err error
+	// get user info
+	var user, err = self.User(accountNumber)
+	if err != nil {
+		return err
+	}
 
-	// TODO
+	err = self.validateWithdrawlParams(user, amount)
+	if err == nil {
+		self.Withdrawls[accountNumber] = user.DailyWithdrawls + amount
+	}
+
+	// TODO update the user's account
 
 	return err
 }
@@ -104,12 +181,9 @@ func (self *ATM) Withdraw(accountNumber string, amount float32) error {
 
 // deposit money into a user's account
 func (self *ATM) DepositContext(ctx context.Context, amount float32) error {
-	var err error
-
 	// TODO future release
-	err = fmt.Errorf("Unsupported function")
 
-	return err
+	return fmt.Errorf("Unsupported function")
 }
 
 // same as DepositContext but with a background context
