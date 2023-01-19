@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/looplab/fsm"
+	"github.com/mitchellkelly/atm/bank"
 )
 
 // key for storing the atm object in the fsm
@@ -158,10 +159,10 @@ var atmFsmCallbacks = fsm.Callbacks{
 			// leave the prompt menu
 			event.FSM.Event(ctx, exitPrompRequestEvent)
 		default:
-			var user User
+			var user bank.User
 			// get the user provided pan from the event args
 			if len(event.Args) > 0 {
-				user, _ = event.Args[0].(User)
+				user, _ = event.Args[0].(bank.User)
 			}
 
 			// parse the user input as a float
@@ -183,11 +184,11 @@ var atmFsmCallbacks = fsm.Callbacks{
 		var metadata, _ = event.FSM.Metadata(fsmAtmMetadataKey)
 		var atm, _ = metadata.(*ATM)
 
-		var user User
+		var user bank.User
 		var withdrawlAmount float32
 		// get the user provided pan and withdrawl amount from the event args
 		if len(event.Args) >= 2 {
-			user, _ = event.Args[0].(User)
+			user, _ = event.Args[0].(bank.User)
 			withdrawlAmount, _ = event.Args[1].(float32)
 		}
 
