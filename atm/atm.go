@@ -2,7 +2,6 @@ package atm
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/looplab/fsm"
@@ -108,22 +107,21 @@ func (self ATM) User(accountNumber string) (bank.User, error) {
 }
 
 func (self ATM) validateWithdrawlParams(user bank.User, amount float32) error {
-	// TODO check the user has enough money in their account for the withdrawl
-
 	// check the withdraw amount is less than the SingleWithdrawlLimit
 	if amount > self.SingleWithdrawlLimit {
-		return fmt.Errorf("The requested withdrawl amount is greater than this ATM allows. Please request a withdrawl less than %f.",
-			self.SingleWithdrawlLimit)
+		return WithdrawErrorSingleLimitMaxExceeded{self.SingleWithdrawlLimit}
 	}
 	var remainingWithdrawlLimit = self.DailyWithdrawlLimit - user.PeriodWithdrawlSum
 	// check the withdraw amount + previous withdraws is less than a user's DailyWithdrawlLimit
 	if amount > remainingWithdrawlLimit {
-		return fmt.Errorf("The requested withdrawl amount is greater than your allowed daily withdrawl limit. You have %f remaining in your daily withdrawl limit",
-			remainingWithdrawlLimit)
+		return WithdrawErrorDailyLimitMaxExceeded{remainingWithdrawlLimit}
+	}
+	if user.PeriodWithdrawlCount+1 > self.DailyWithdrawlCountLimit {
+		return WithdrawErrorWithdrawlCountExceeded{}
 	}
 	// check the ATM has enough money to process the withdrawl
 	if amount > self.Balance {
-		return fmt.Errorf("This ATM does not have enough money to process your transaction. Please try again tomorrow.")
+		return WithdrawErrorATMInvalidFunds{}
 	}
 
 	return nil
@@ -163,7 +161,7 @@ func (self *ATM) Withdraw(accountNumber string, amount float32) error {
 func (self *ATM) DepositContext(ctx context.Context, amount float32) error {
 	// TODO future release
 
-	return fmt.Errorf("Unsupported function")
+	return unsupportedFunctionError
 }
 
 // same as DepositContext but with a background context
