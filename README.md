@@ -20,6 +20,8 @@ To run the project in the docker container run the following command after build
 docker run -it mitchellkelly/atm
 ```
 
+## Finite State Machine
+
 This project uses a finite state machine to manage the ATM state. A diagram of the ATM FSM is below.
 
 ![ATM FSM](../media/fsm.png?raw=true)
