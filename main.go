@@ -11,6 +11,7 @@ func main() {
 	var machine = atm.ATM{
 		SingleWithdrawlLimit: 500,
 		DailyWithdrawlLimit:  1000,
+		DailyWithdrawlCountLimit: 3,
 	}
 	// run the atm
 	machine.Run()
